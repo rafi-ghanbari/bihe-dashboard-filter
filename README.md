@@ -13,7 +13,7 @@ A Tampermonkey userscript to filter specific courses from the timeline and calen
 
 1. Install the [Tampermonkey](https://www.tampermonkey.net/) browser extension.
 2. Create a new script in Tampermonkey.
-3. Copy and paste the content of `BIHE Course Filter-1.0.user.js` into the editor.
+3. Copy and paste the content of `bihe-dashboard-filter.js` into the editor.
 4. Save the script.
 
 ## Configuration
