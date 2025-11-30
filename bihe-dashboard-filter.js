@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BIHE Course Filter
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Hide specific courses from timeline and calendar
 // @author       Rafi_Ghanbari
 // @match        https://learning.bihe23.com/my/*
@@ -21,16 +21,40 @@
 
     /**
      * Clicks the "Show more activities" button to load all events.
-     * Returns true if the button was found and clicked, false otherwise.
+     * Returns a promise that resolves when clicking is complete.
      */
-    function clickShowMoreButton() {
-        const moreButton = document.querySelector('[data-region="more-events-button-container"] button[data-action="more-events"]');
-        if (moreButton && moreButton.offsetParent !== null) {
-            moreButton.click();
-            console.log('Clicked "Show more activities" button');
-            return true;
-        }
-        return false;
+    async function clickShowMoreButton() {
+        return new Promise((resolve) => {
+            let attempts = 0;
+            const maxAttempts = 20;
+            const checkInterval = 500;
+
+            const clickInterval = setInterval(() => {
+                attempts++;
+                
+                const moreButton = document.querySelector('[data-region="more-events-button-container"] button[data-action="more-events"]');
+                
+                if (moreButton && moreButton.offsetParent !== null && !moreButton.disabled) {
+                    moreButton.click();
+                    console.log(`Clicked "Show more activities" button (attempt ${attempts})`);
+                    
+                    // Wait a bit for new content to load before checking again
+                    setTimeout(() => {
+                        // Check if button still exists (if not, we're done)
+                        const stillExists = document.querySelector('[data-region="more-events-button-container"] button[data-action="more-events"]');
+                        if (!stillExists || stillExists.offsetParent === null) {
+                            clearInterval(clickInterval);
+                            console.log('No more "Show more" button found - all events loaded');
+                            resolve();
+                        }
+                    }, 1000);
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(clickInterval);
+                    console.log('Max attempts reached or button not found');
+                    resolve();
+                }
+            }, checkInterval);
+        });
     }
 
     /**
