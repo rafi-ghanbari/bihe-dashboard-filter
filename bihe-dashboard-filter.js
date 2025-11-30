@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BIHE Course Filter
 // @namespace    http://tampermonkey.net/
-// @version      1.2
+// @version      1.4
 // @description  Hide specific courses from timeline and calendar
 // @author       Rafi_Ghanbari
 // @match        https://learning.bihe23.com/my/*
@@ -20,41 +20,80 @@
     const hiddenIds = [];
 
     /**
-     * Ensures the timeline filter is set to "All" before processing.
+     * Ensures the timeline filter is set to "All" and sort is set to "Sort by dates".
      */
-    function setFilterToAll() {
+    function setFiltersToDefault() {
+        // Set day filter to "All"
         const filterButton = document.querySelector('[data-region="day-filter"] button[data-toggle="dropdown"]');
         const currentSelection = document.getElementById('timeline-day-filter-current-selection');
         
-        if (!filterButton || !currentSelection) {
-            console.log('Filter button not found');
-            return;
+        if (filterButton && currentSelection) {
+            const currentFilterText = currentSelection.textContent.trim();
+            
+            if (currentFilterText !== 'All') {
+                console.log(`Current filter is "${currentFilterText}", changing to "All"`);
+                
+                // Open dropdown if not already open
+                if (!filterButton.classList.contains('show') && !filterButton.getAttribute('aria-expanded')) {
+                    filterButton.click();
+                    console.log('Opened filter dropdown');
+                }
+                
+                setTimeout(() => {
+                    const allFilterOption = document.querySelector('[data-region="day-filter"] a[data-filtername="all"]');
+                    if (allFilterOption) {
+                        allFilterOption.click();
+                        console.log('Clicked "All" filter option');
+                    } else {
+                        console.log('All filter option not found');
+                    }
+                }, 200);
+            } else {
+                console.log('Filter already set to "All"');
+            }
+        } else {
+            console.log('Day filter button not found');
         }
 
-        const currentFilterText = currentSelection.textContent.trim();
-        
-        if (currentFilterText !== 'All') {
-            console.log(`Current filter is "${currentFilterText}", changing to "All"`);
+        // Set sort to "Sort by dates"
+        setTimeout(() => {
+            const sortButton = document.querySelector('[data-region="view-selector"] button[data-toggle="dropdown"]');
+            const sortSelection = document.getElementById('timeline-view-selector-current-selection');
             
-            // Open dropdown if not already open
-            if (!filterButton.classList.contains('show') && !filterButton.getAttribute('aria-expanded')) {
-                filterButton.click();
-                console.log('Opened filter dropdown');
-            }
-            
-            // Wait a moment for dropdown to open, then click "All"
-            setTimeout(() => {
-                const allFilterOption = document.querySelector('[data-region="day-filter"] a[data-filtername="all"]');
-                if (allFilterOption) {
-                    allFilterOption.click();
-                    console.log('Clicked "All" filter option');
+            if (sortButton && sortSelection) {
+                const currentSortText = sortSelection.textContent.trim();
+                
+                if (currentSortText !== 'Sort by dates') {
+                    console.log(`Current sort is "${currentSortText}", changing to "Sort by dates"`);
+                    
+                    // Open dropdown if not already open
+                    if (!sortButton.classList.contains('show') && !sortButton.getAttribute('aria-expanded')) {
+                        sortButton.click();
+                        console.log('Opened sort dropdown');
+                    }
+                    
+                    
+                    setTimeout(() => {
+                        const sortByDatesOption = document.querySelector('[data-region="view-selector"] a[data-filtername="sortbydates"]');
+                        if (sortByDatesOption) {
+                            sortByDatesOption.click();
+                            console.log('Clicked "Sort by dates" option - reloading page...');
+                            
+                            // Reload page after changing sort to ensure proper rendering
+                            setTimeout(() => {
+                                location.reload();
+                            }, 500);
+                        } else {
+                            console.log('Sort by dates option not found');
+                        }
+                    }, 200);
                 } else {
-                    console.log('All filter option not found');
+                    console.log('Sort already set to "Sort by dates"');
                 }
-            }, 200);
-        } else {
-            console.log('Filter already set to "All"');
-        }
+            } else {
+                console.log('Sort button not found');
+            }
+        }, 400);
     }
 
     /**
@@ -75,8 +114,7 @@
                 if (moreButton && moreButton.offsetParent !== null && !moreButton.disabled) {
                     moreButton.click();
                     console.log(`Clicked "Show more activities" button (attempt ${attempts})`);
-
-                    // Wait a bit for new content to load before checking again
+                    
                     setTimeout(() => {
                         // Check if button still exists (if not, we're done)
                         const stillExists = document.querySelector('[data-region="more-events-button-container"] button[data-action="more-events"]');
@@ -215,10 +253,10 @@
     function main() {
         console.log('BIHE Course Filter started');
 
-        // First, ensure filter is set to "All"
-        setFilterToAll();
+        // First, ensure filters are set correctly (All + Sort by dates)
+        setFiltersToDefault();
 
-        // Wait a bit for filter to apply, then proceed with clicking "Show more"
+        // Wait a bit for filters to apply, then proceed with clicking "Show more"
         setTimeout(() => {
             let clickAttempts = 0;
             const maxClickAttempts = 10;
