@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BIHE Course Filter
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Hide specific courses from timeline and calendar
 // @author       Rafi_Ghanbari
 // @match        https://learning.bihe23.com/my/*
@@ -20,6 +20,44 @@
     const hiddenIds = [];
 
     /**
+     * Ensures the timeline filter is set to "All" before processing.
+     */
+    function setFilterToAll() {
+        const filterButton = document.querySelector('[data-region="day-filter"] button[data-toggle="dropdown"]');
+        const currentSelection = document.getElementById('timeline-day-filter-current-selection');
+        
+        if (!filterButton || !currentSelection) {
+            console.log('Filter button not found');
+            return;
+        }
+
+        const currentFilterText = currentSelection.textContent.trim();
+        
+        if (currentFilterText !== 'All') {
+            console.log(`Current filter is "${currentFilterText}", changing to "All"`);
+            
+            // Open dropdown if not already open
+            if (!filterButton.classList.contains('show') && !filterButton.getAttribute('aria-expanded')) {
+                filterButton.click();
+                console.log('Opened filter dropdown');
+            }
+            
+            // Wait a moment for dropdown to open, then click "All"
+            setTimeout(() => {
+                const allFilterOption = document.querySelector('[data-region="day-filter"] a[data-filtername="all"]');
+                if (allFilterOption) {
+                    allFilterOption.click();
+                    console.log('Clicked "All" filter option');
+                } else {
+                    console.log('All filter option not found');
+                }
+            }, 200);
+        } else {
+            console.log('Filter already set to "All"');
+        }
+    }
+
+    /**
      * Clicks the "Show more activities" button to load all events.
      * Returns a promise that resolves when clicking is complete.
      */
@@ -31,13 +69,13 @@
 
             const clickInterval = setInterval(() => {
                 attempts++;
-                
+
                 const moreButton = document.querySelector('[data-region="more-events-button-container"] button[data-action="more-events"]');
-                
+
                 if (moreButton && moreButton.offsetParent !== null && !moreButton.disabled) {
                     moreButton.click();
                     console.log(`Clicked "Show more activities" button (attempt ${attempts})`);
-                    
+
                     // Wait a bit for new content to load before checking again
                     setTimeout(() => {
                         // Check if button still exists (if not, we're done)
@@ -177,28 +215,34 @@
     function main() {
         console.log('BIHE Course Filter started');
 
-        let clickAttempts = 0;
-        const maxClickAttempts = 10;
+        // First, ensure filter is set to "All"
+        setFilterToAll();
 
-        // Try to click "Show more" button repeatedly until successful or max attempts reached
-        const clickInterval = setInterval(() => {
-            const clicked = clickShowMoreButton();
-            clickAttempts++;
+        // Wait a bit for filter to apply, then proceed with clicking "Show more"
+        setTimeout(() => {
+            let clickAttempts = 0;
+            const maxClickAttempts = 10;
 
-            if (!clicked || clickAttempts >= maxClickAttempts) {
-                clearInterval(clickInterval);
-                console.log('Finished clicking "Show more" button');
+            // Try to click "Show more" button repeatedly until successful or max attempts reached
+            const clickInterval = setInterval(() => {
+                const clicked = clickShowMoreButton();
+                clickAttempts++;
 
-                // Initial processing after clicking is done
-                setTimeout(() => {
-                    processTimelineEvents();
+                if (!clicked || clickAttempts >= maxClickAttempts) {
+                    clearInterval(clickInterval);
+                    console.log('Finished clicking "Show more" button');
 
-                    // Delay calendar processing slightly to ensure DOM is ready
+                    // Initial processing after clicking is done
                     setTimeout(() => {
-                        processCalendarEvents();
+                        processTimelineEvents();
+
+                        // Delay calendar processing slightly to ensure DOM is ready
+                        setTimeout(() => {
+                            processCalendarEvents();
+                        }, 500);
                     }, 500);
-                }, 500);
-            }
+                }
+            }, 1000);
         }, 1000);
     }
 
