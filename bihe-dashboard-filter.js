@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         BIHE Course Filter
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  Hide specific courses from timeline and calendar
-// @author       Rafi_Ghanbari
+// @author       Rafi-Ghanbari
 // @match        https://learning.bihe23.com/my/*
 // @grant        none
 // ==/UserScript==
@@ -16,8 +16,8 @@
         'Physical Chemistry II',
     ];
 
-    // Array to store the IDs of hidden courses, dynamically populated
-    const hiddenIds = [];
+    // Map to store event URLs that should be hidden (from timeline processing)
+    const hiddenEventUrls = new Set();
 
     /**
      * Ensures the timeline filter is set to "All" and sort is set to "Sort by dates".
@@ -33,7 +33,6 @@
             if (currentFilterText !== 'All') {
                 console.log(`Current filter is "${currentFilterText}", changing to "All"`);
                 
-                // Open dropdown if not already open
                 if (!filterButton.classList.contains('show') && !filterButton.getAttribute('aria-expanded')) {
                     filterButton.click();
                     console.log('Opened filter dropdown');
@@ -66,12 +65,10 @@
                 if (currentSortText !== 'Sort by dates') {
                     console.log(`Current sort is "${currentSortText}", changing to "Sort by dates"`);
                     
-                    // Open dropdown if not already open
                     if (!sortButton.classList.contains('show') && !sortButton.getAttribute('aria-expanded')) {
                         sortButton.click();
                         console.log('Opened sort dropdown');
                     }
-                    
                     
                     setTimeout(() => {
                         const sortByDatesOption = document.querySelector('[data-region="view-selector"] a[data-filtername="sortbydates"]');
@@ -79,7 +76,6 @@
                             sortByDatesOption.click();
                             console.log('Clicked "Sort by dates" option - reloading page...');
                             
-                            // Reload page after changing sort to ensure proper rendering
                             setTimeout(() => {
                                 location.reload();
                             }, 500);
@@ -98,7 +94,6 @@
 
     /**
      * Clicks the "Show more activities" button to load all events.
-     * Returns a promise that resolves when clicking is complete.
      */
     async function clickShowMoreButton() {
         return new Promise((resolve) => {
@@ -116,7 +111,6 @@
                     console.log(`Clicked "Show more activities" button (attempt ${attempts})`);
                     
                     setTimeout(() => {
-                        // Check if button still exists (if not, we're done)
                         const stillExists = document.querySelector('[data-region="more-events-button-container"] button[data-action="more-events"]');
                         if (!stillExists || stillExists.offsetParent === null) {
                             clearInterval(clickInterval);
@@ -134,8 +128,14 @@
     }
 
     /**
+     * Normalize URL by removing protocol and trailing slashes for comparison
+     */
+    function normalizeUrl(url) {
+        return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    }
+
+    /**
      * Processes the timeline events to hide specific courses.
-     * Also extracts the IDs of hidden courses to use for calendar filtering.
      */
     function processTimelineEvents() {
         const eventWrapper = document.querySelector('[data-region="event-list-wrapper"]');
@@ -147,25 +147,18 @@
             const courseNameElement = item.querySelector('.event-name-container small');
             if (!courseNameElement) return;
 
-            const courseText = courseNameElement.textContent;
+            const courseText = courseNameElement.textContent.trim();
 
             // Check if the course name matches any in the hiddenCourses list
             const shouldHide = hiddenCourses.some(course => courseText.includes(course));
 
             if (shouldHide) {
-                // Extract the course ID from the link to hide it in the calendar view as well
+                // Store the URL of this event for calendar filtering
                 const link = item.querySelector('.event-name a');
                 if (link) {
-                    const url = link.getAttribute('href');
-                    const idMatch = url.match(/[?&]id=(\d+)/);
-
-                    if (idMatch) {
-                        const id = idMatch[1];
-                        if (!hiddenIds.includes(id)) {
-                            hiddenIds.push(id);
-                            console.log(`Hidden ID added: ${id} from course: ${courseText}`);
-                        }
-                    }
+                    const url = normalizeUrl(link.getAttribute('href'));
+                    hiddenEventUrls.add(url);
+                    console.log(`Added to hidden URLs: ${url}`);
                 }
 
                 // Hide the timeline event item
@@ -190,13 +183,11 @@
         dateHeaders.forEach(dateHeader => {
             let nextElement = dateHeader.nextElementSibling;
 
-            // Find the next list group containing events
             while (nextElement && !nextElement.classList.contains('list-group')) {
                 nextElement = nextElement.nextElementSibling;
             }
 
             if (nextElement && nextElement.classList.contains('list-group')) {
-                // Check if there are any visible events in the group
                 const visibleEvents = Array.from(nextElement.querySelectorAll('[data-region="event-list-item"]'))
                     .filter(item => item.style.display !== 'none' && item.offsetParent !== null);
 
@@ -211,7 +202,7 @@
     }
 
     /**
-     * Processes the calendar view to hide events matching the hidden IDs.
+     * Processes the calendar view to hide events matching the hidden URLs.
      */
     function processCalendarEvents() {
         const calendarTables = document.querySelectorAll('table[id^="month-detailed-"]');
@@ -223,22 +214,18 @@
                 const dayCells = row.querySelectorAll('td');
 
                 dayCells.forEach(cell => {
-                    const eventLinks = cell.querySelectorAll('a[href*="id="]');
+                    const eventItems = cell.querySelectorAll('li[data-region="event-item"]');
 
-                    eventLinks.forEach(link => {
-                        const url = link.getAttribute('href');
-                        const idMatch = url.match(/[?&]id=(\d+)/);
-
-                        if (idMatch) {
-                            const id = idMatch[1];
-
-                            // Hide the event if its ID is in the hiddenIds list
-                            if (hiddenIds.includes(id)) {
-                                let parentDiv = link.closest('div');
-                                if (parentDiv) {
-                                    parentDiv.style.display = 'none';
-                                    console.log(`Hidden calendar event with ID: ${id}`);
-                                }
+                    eventItems.forEach(eventItem => {
+                        const link = eventItem.querySelector('a[data-action="view-event"]');
+                        
+                        if (link) {
+                            const url = normalizeUrl(link.getAttribute('href'));
+                            
+                            // Only hide if this exact URL was hidden in timeline
+                            if (hiddenEventUrls.has(url)) {
+                                eventItem.style.display = 'none';
+                                console.log(`Hidden calendar event: ${link.getAttribute('title')} (${url})`);
                             }
                         }
                     });
@@ -253,15 +240,12 @@
     function main() {
         console.log('BIHE Course Filter started');
 
-        // First, ensure filters are set correctly (All + Sort by dates)
         setFiltersToDefault();
 
-        // Wait a bit for filters to apply, then proceed with clicking "Show more"
         setTimeout(() => {
             let clickAttempts = 0;
             const maxClickAttempts = 10;
 
-            // Try to click "Show more" button repeatedly until successful or max attempts reached
             const clickInterval = setInterval(() => {
                 const clicked = clickShowMoreButton();
                 clickAttempts++;
@@ -270,12 +254,11 @@
                     clearInterval(clickInterval);
                     console.log('Finished clicking "Show more" button');
 
-                    // Initial processing after clicking is done
                     setTimeout(() => {
                         processTimelineEvents();
 
-                        // Delay calendar processing slightly to ensure DOM is ready
                         setTimeout(() => {
+                            console.log(`Total hidden event URLs: ${hiddenEventUrls.size}`);
                             processCalendarEvents();
                         }, 500);
                     }, 500);
@@ -284,20 +267,17 @@
         }, 1000);
     }
 
-    // Run main function when DOM is fully loaded
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', main);
     } else {
         main();
     }
 
-    // Observe DOM changes to handle dynamic content loading (e.g., calendar navigation)
     const observer = new MutationObserver(() => {
         processTimelineEvents();
         processCalendarEvents();
     });
 
-    // Start observing after a short delay
     setTimeout(() => {
         observer.observe(document.body, {
             childList: true,
